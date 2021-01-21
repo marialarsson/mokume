@@ -1,29 +1,36 @@
 import math
 import numpy as np
+import itertools
 
 class Stem:
-    def __init__(self, res, randomize=False, d=0.1, cx=0.5, cy=0.5):
-        self.res = res
-        if randomize:
-            self.d = random.uniform(0.08,0.12)      # distance between growth surface
-            self.cx = random.uniform(-0.25,1.25)    # skeleton center point x value
-            self.cy = random.uniform(-0.25,1.25)    # skeleton center point y value
-        else:
-            self.d = d
-            self.cx = cx
-            self.cy = cy
+    def __init__(self, dwh, dim, ppts, rads, yrs):
+        self.dwh = dwh #depth, width, height
+        self.dim = dim
+        self.ppc = dim/dwh
+        self.ppts = ppts
+        self.rads = rads
+        self.yrs = yrs
+        self.org = ppts[0]
         self.create_3D_distance_array()
 
     def create_3D_distance_array(self):
-        self.dist_array = np.zeros((self.res,self.res,self.res))
-        for i in range(self.res):
-            for j in range(self.res):
-                for k in range(self.res):
-                    self.dist_array[i][j][k] = self.distance_function(i,j,k)
+        ind_list = [i for i in range(self.dim)]
+        point_inds = list(itertools.product(ind_list,repeat=3))
+        dist_array=[]
+        for ind in point_inds: dist_array.append(self.distance_function(np.array(ind),self.rads))
+        self.dist_array = np.reshape(np.array(dist_array),(self.dim,self.dim,self.dim))
 
-    def distance_function(self,x,y,z):
-        x = x/self.res-self.cx
-        y = y/self.res-self.cy
-        z = z/self.res
-        distance = math.sqrt(x**2+y**2)/self.d
-        return distance
+    def distance_function(self,pt,rads):
+        pt = pt/self.ppc
+        x,y,z = pt
+        radi = int(pt[2])
+        ratio = pt[2]-radi
+        dist = 999
+        if y==0: alfa=0
+        else: alfa = math.atan(x/y)
+        r_max = (1-ratio)*rads[radi][round(alfa)]+ratio*rads[radi+1][round(alfa)]
+        r = math.sqrt(x**2+y**2)
+        if r<r_max:
+            d = r_max/self.yrs
+            dist = r/d
+        return dist

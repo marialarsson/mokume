@@ -38,57 +38,62 @@ def smooth_union_incre(d1,d2,kmin,kmax):
     d[d<0] = 0
     return d
 
-def dist_array_to_point_cloud(dist_array,res):
-
-    #points = np.argwhere(dist_array%1<0.25)
-    points = np.argwhere(dist_array>=0)
-    #points = np.argwhere( (dist_array%1<0.25) & (dist_array<20.25) )
+def dist_array_to_point_cloud(dist_array,org,ppc,yrs):
+    #inds = np.argwhere(dist_array%1<0.25)
+    #inds = np.argwhere(dist_array>=0)
+    #inds = np.argwhere(dist_array<=yrs)
+    inds = np.argwhere( (dist_array%1<0.25) & (dist_array<=yrs) )
+    points = []
     colors = [] # Colors (rainbow color gradient according to year)
-    for ind in points:
-        t = (dist_array[tuple(ind)]/10)%10
+    org = np.array(org)
+    for ind in inds:
+        points.append(ind/ppc+org) #+org
+        t = (dist_array[tuple(ind)]/yrs)%yrs
         (r, g, b) = colorsys.hsv_to_rgb(t, 1.0, 1.0)
         colors.append([r,g,b])
+    points = np.array(points)
+    points = points.astype('float64')
     colors = np.array(colors)
-    points = points.astype('float64')/(res-1)
     return points,colors
 
 start_time = time.time()
 
 # Resolution of the 3D image
-cube_resolution = 32
-z0 = 177
-zd = 15
+cube_side_length = 5 #cm
+cube_resolution = 30 # points per side
+x0 = y0 = 0
+z0 = 167 #cm
+yrs = 10
 
 # Load parameter files
-ppts, ppts_all =  load_pith_points(        "000111", z0,zd)
-rpts, rpts_ends = load_outer_shape_points( "000111", ppts_all, z0,zd)
-bpts, bpts_all =  load_branch_points(      "000111", ppts_all, z0,zd)
+zd = cube_side_length+1
+ppts, ppts_all =  load_pith_points(        "000111", z0, zd)
+rpts, rads, rpts_ends = load_outer_shape_points( "000111", ppts_all, z0, zd)
+bpts, brads, bpts_all =  load_branch_points(      "000111", ppts_all, z0, zd)
 
-
-"""
 # Create an instance of the stem class
-stem = Stem(cube_resolution,randomize=False)
+stem = Stem(cube_side_length, cube_resolution, ppts, rads, yrs)
 
 # Create and instance of the branch class
-bn = 1
 branches = []
-for i in range(bn): branches.append(Branch(stem,cube_resolution,randomize=True))
+for pts,rads in zip(bpts,brads): branches.append(Branch(stem,pts,rads))
 
 # Smoothly join the stem and the branch
-#dist_array = smooth_union_incre(stem.dist_array, branch.dist_array,0.5,5)
+#dist_array = smooth_union_incre(stem.dist_array, branch.dist_array, 0.5, 5)
+#dist_array = branches[0].dist_array
 dist_array = stem.dist_array
-for branch in branches: dist_array = smooth_union(dist_array, branch.dist_array,3)
+#for branch in branches: dist_array = smooth_union(dist_array, branch.dist_array, 20)
 
 # Create point cloud
-points,colors = dist_array_to_point_cloud(dist_array,cube_resolution)
+points,colors = dist_array_to_point_cloud(dist_array,stem.org,stem.ppc,stem.yrs)
 
-"""
 # Define point cloud for visualization with open3d
 open3d.PointCloud = open3d.geometry.PointCloud
-"""
+
 point_cloud = open3d.PointCloud()
 point_cloud.points = open3d.utility.Vector3dVector(points)
 point_cloud.colors = open3d.utility.Vector3dVector(colors)
+
 
 # mesh stuff
 meshes = []
@@ -97,7 +102,7 @@ n_end = int(np.max(dist_array))
 for n in range(n_start,n_end):
     loc_dist_array = np.copy(dist_array)-n
     vers, tris = mcubes.marching_cubes(loc_dist_array, 0)
-    vers = vers/(cube_resolution-1)
+    vers = vers/stem.ppc + stem.org
     #Define mesh
     mesh = open3d.geometry.TriangleMesh()
     mesh.vertices = open3d.utility.Vector3dVector(vers)
@@ -106,55 +111,51 @@ for n in range(n_start,n_end):
     mesh.paint_uniform_color(np.array([r,g,b]))
     #mesh.compute_vertex_normals()
     meshes.append(mesh)
-"""
+
+
 # Open3D stuff
 # Define outlines of the cube for visualization with open3d
-points = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1],[0, 1, 1], [1, 1, 1]]
+L = cube_side_length
+points = np.array(list(itertools.product([0,1],repeat=3)))
+points = points*L+stem.org
+#[[0, 0, z0], [L, 0, z0], [0, L, z0], [L, L, z0], [0, 0, z1], [L, 0, z1],[0, L, z1], [L, L, z1]]
 #points = (cube_resolution-1)*np.array(points)
-lines = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7],[0, 4], [1, 5], [2, 6], [3, 7]]
+lines = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7], [0, 4], [1, 5], [2, 6], [3, 7]]
 colors = [[0, 0, 0] for i in range(len(lines))]
 line_set = open3d.geometry.LineSet()
 line_set.points = open3d.utility.Vector3dVector(points)
 line_set.lines = open3d.utility.Vector2iVector(lines)
 line_set.colors = open3d.utility.Vector3dVector(colors)
 
-"""
-## segemnts
-points = []
-lines = []
-for i,seg in enumerate(branch.segs):
-    x = seg.xdomain[0]
-    z = seg.a+seg.k*x+branch.t
-    points.append([x,0,z])
-    x = seg.xdomain[1]
-    z = seg.a+seg.k*x+branch.t
-    points.append([x,0,z])
-    lines.append([2*i,2*i+1])
-line_segs = open3d.geometry.LineSet()
-line_segs.points = open3d.utility.Vector3dVector(points)
-line_segs.lines = open3d.utility.Vector2iVector(lines)
-point_cloud_seg_pts = open3d.PointCloud()
-point_cloud_seg_pts.points = open3d.utility.Vector3dVector(points)
-"""
-
 point_cloud_param = open3d.PointCloud()
 param_pts = []
 param_pts.extend(ppts_all)
-for pts in rpts: param_pts.extend(pts)
+param_pts.extend(rpts[0])
+param_pts.extend(rpts[-1])
 for pts in rpts_ends: param_pts.extend(pts)
-for pts in bpts: param_pts.extend(pts)
+for pts in bpts_all: param_pts.extend(pts)
 point_cloud_param.points = open3d.utility.Vector3dVector(param_pts)
+
+points = []
+lines = []
+cnt=0
+for pts in bpts_all:
+    points.extend(pts)
+    for i in range(len(pts)-1): lines.append([cnt+i,cnt+i+1])
+    cnt+=len(pts)
+line_branches = open3d.geometry.LineSet()
+line_branches.points = open3d.utility.Vector3dVector(points)
+line_branches.lines = open3d.utility.Vector2iVector(lines)
 
 #print('Resolution:', cube_resolution)
 #print('Calculation time:', time.time()-start_time)
 
 geos = []
-#geos.extend(meshes)
+geos.extend(meshes)
 geos.append(line_set)
-#geos.append(line_segs)
-#geos.append(point_cloud_seg_pts)
 geos.append(point_cloud_param)
 #geos.append(point_cloud)
+geos.append(line_branches)
 
 
 vis = open3d.visualization.Visualizer()
