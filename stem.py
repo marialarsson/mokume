@@ -3,34 +3,28 @@ import numpy as np
 import itertools
 
 class Stem:
-    def __init__(self, dwh, dim, ppts, rads, yrs):
-        self.dwh = dwh #depth, width, height
-        self.dim = dim
-        self.ppc = dim/dwh
-        self.ppts = ppts
-        self.rads = rads
-        self.yrs = yrs
-        self.org = ppts[0]
+    def __init__(self, box, para):
+        self.box = box
+        self.para = para
         self.create_3D_distance_array()
 
     def create_3D_distance_array(self):
-        ind_list = [i for i in range(self.dim)]
-        point_inds = list(itertools.product(ind_list,repeat=3))
-        dist_array=[]
-        for ind in point_inds: dist_array.append(self.distance_function(np.array(ind),self.rads))
-        self.dist_array = np.reshape(np.array(dist_array),(self.dim,self.dim,self.dim))
+        self.dist_array = np.zeros(self.box.res+1, dtype='float64')
+        for ind in self.box.inds:
+            pt = self.box.abs_pts[tuple(ind)]
+            self.dist_array[tuple(ind)] = self.distance_function(pt)
 
-    def distance_function(self,pt,rads):
-        pt = pt/self.ppc
-        x,y,z = pt
-        radi = int(pt[2])
-        ratio = pt[2]-radi
-        dist = 999
-        if y==0: alfa=0
-        else: alfa = math.atan(x/y)
-        r_max = (1-ratio)*rads[radi][round(alfa)]+ratio*rads[radi+1][round(alfa)]
-        r = math.sqrt(x**2+y**2)
-        if r<r_max:
-            d = r_max/self.yrs
-            dist = r/d
-        return dist
+    def distance_function(self,pt):
+        zf = pt[2]-self.box.pos[2]
+        zi = int(zf)
+        ratio = zf-zi
+        rel_pt = pt-self.para.ppts[zi]
+        x,y,z = rel_pt
+        if y==0: omega=0
+        else: omega = math.degrees(math.atan(x/y))
+        r0 = self.para.rads[zi][round(omega)]
+        #r1 = self.para.rads[radi+1][round(omega)]
+        #r_max = ratio*r0+(1-ratio)*r1
+        #d = r_max/(self.para.yrs-1)
+        d = r0/(self.para.yrs-1) #temp
+        return math.sqrt(x**2+y**2)/d
