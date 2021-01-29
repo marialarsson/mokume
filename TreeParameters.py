@@ -9,6 +9,7 @@ class TreeParameters:
         self.yrs = yrs
         zd = box.dim[2]+1
         self.load_pith_points()
+        self.box.update_xy_pos(self.ppts[0])
         self.load_outer_shape_points()
         self.load_branch_points()
 
@@ -17,13 +18,14 @@ class TreeParameters:
         file = open(path, "r")
         lines = file.readlines()
         z_num = int(len(lines)/3)
-        self.ppts = self.ppts_all = []
+        self.ppts = []
+        self.ppts_all = []
         for i in range(z_num):
             x = 0.1*float(lines[i].split("\n")[0])          # millimeter to centimeter
             y = -0.1*float(lines[i+z_num].split("\n")[0])   # millimeter to centimeter
             if i==0: x0, y0 = x, y
             pt = [x-x0,y-y0,i]
-            if pt[2]>self.box.z0 and pt[2]<(self.box.z1): self.ppts.append(pt)
+            if pt[2]>=self.box.z0 and pt[2]<=(self.box.z1): self.ppts.append(pt)
             self.ppts_all.append(pt)
         #x = rad*math.cos(ang)-org[0]
         #y = rad*math.sin(ang)-org[1]
@@ -48,14 +50,14 @@ class TreeParameters:
         self.rads = smoothen_rads(self.rads,smooth_v,smooth_h)
         for i in range(smooth_v):
             self.rads.pop(0)
-            self.rads.pop(1)
+            self.rads.pop(-1)
 
         ### #get points
         self.rpts = []
         for i in range(len(self.rads)):
             pts = []
             for j in range(360):
-                org = self.ppts[self.box.z0+i]
+                org = self.ppts[i]
                 rad = self.rads[i][j]
                 pts.append(point_from_rad(org,rad,j))
             self.rpts.append(pts)

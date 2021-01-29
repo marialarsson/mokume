@@ -39,7 +39,19 @@ def get_dist_to_line_2(p, p0, p1): #p: point, p0: line start point, p1: line end
     v0 = p1-p0
     v1 = p-p0
     v2 = p-p1
+
+
     a = angle(v0,v1)
     if a<90: dist = np.linalg.norm(v1)*math.sin(math.radians(a))
     else: dist = np.linalg.norm(v1)
     return dist
+
+def rotateZ(pts,org,ang,degrees=False):
+    if degrees: ang = math.degrees(ang)
+    for i in range(len(pts)):
+        pts[i] = np.array(pts[i])-np.array(org)
+        x0,y0,_ = pts[i]
+        pts[i][0] = x0*math.cos(ang)-y0*math.sin(ang)
+        pts[i][1] = x0*math.sin(ang)+y0*math.cos(ang)
+        pts[i] = pts[i]+np.array(org)
+    return pts

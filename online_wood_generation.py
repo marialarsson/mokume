@@ -10,6 +10,7 @@ from CuttingBox import CuttingBox
 from TreeParameters import TreeParameters
 from Stem import Stem
 from Knot import Knot
+from functions import *
 
 def smooth_union(d1,d2,k):
     #Smoothly joining 2 distnace fields
@@ -40,8 +41,8 @@ def smooth_union_incre(d1,d2,kmin,kmax):
 def dist_array_to_point_cloud(dist_array,box,para):
     #inds = np.argwhere(dist_array%1<0.25)
     #inds = np.argwhere(dist_array>=0)
-    #inds = np.argwhere(dist_array<=yrs)
-    inds = np.argwhere( (dist_array%1<0.25) & (dist_array<=para.yrs) )
+    inds = np.argwhere(dist_array<=para.yrs)
+    #inds = np.argwhere( (dist_array%1<0.25) & (dist_array<=para.yrs) )
     points = []
     colors = [] # Colors (rainbow color gradient according to year)
     pos = np.array(box.pos)
@@ -55,109 +56,133 @@ def dist_array_to_point_cloud(dist_array,box,para):
     colors = np.array(colors)
     return points,colors
 
+def create_box_outline_and_mesh(box):
+    #points/vertices
+    inds = np.array(list(itertools.product([0,1],repeat=3)))
+    points = []
+    a,b,c = np.array(box.abs_pts.shape[:3])-1
+    for i,j,k in inds: points.append(box.abs_pts[a*i][b*j][c*k])
+    #lines for outlines
+    lines = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7], [0, 4], [1, 5], [2, 6], [3, 7]]
+    colors = [[0, 0, 0] for i in range(len(lines))]
+    line_set = open3d.geometry.LineSet()
+    line_set.points = open3d.utility.Vector3dVector(points)
+    line_set.lines = open3d.utility.Vector2iVector(lines)
+    line_set.colors = open3d.utility.Vector3dVector(colors)
+    #faces for mesh
+    tris = [[0,3,1],[0,2,3], [4,6,5],[6,5,7], [0,4,1],[1,5,4], [1,3,7],[1,7,5], [2,3,7],[2,7,6], [0,2,4],[2,4,6]]
+    mesh = open3d.geometry.TriangleMesh()
+    mesh.vertices = open3d.utility.Vector3dVector(points)
+    mesh.triangles = open3d.utility.Vector3iVector(tris)
+    mesh.paint_uniform_color(np.array([1.0,1.0,1.0])) #white
+    #return
+    return line_set, mesh
+
+def create_point_cloud(points, colors=[]):
+    point_cloud = open3d.geometry.PointCloud()
+    point_cloud.points = open3d.utility.Vector3dVector(points)
+    if len(colors)>0: point_cloud.colors = open3d.utility.Vector3dVector(colors)
+    return point_cloud
+
+def create_meshes(dist_array, box, para, n_start=None, n_end=None):
+    meshes = []
+    if n_start==None: n_start = int(np.min(dist_array))+1
+    if n_end==None:   n_end =   int(np.max(dist_array))
+    if n_end>para.yrs: n_end=para.yrs
+    #n_start = 2
+    #n_end = 7
+    for n in range(n_start,n_end):
+        loc_dist_array = np.copy(dist_array)-n
+        vers, tris = mcubes.marching_cubes(loc_dist_array, 0)
+        vers = rotateZ(vers/box.ppc,para.ppts[0],box.rot) + box.pos #scale, rotate, move
+        #Define mesh
+        mesh = open3d.geometry.TriangleMesh()
+        mesh.vertices = open3d.utility.Vector3dVector(vers)
+        mesh.triangles = open3d.utility.Vector3iVector(tris)
+        (r, g, b) = colorsys.hsv_to_rgb((n/10)%10, 1.0, 1.0)
+        mesh.paint_uniform_color(np.array([r,g,b]))
+        mesh.compute_vertex_normals()
+        meshes.append(mesh)
+    print(n, "meshes")
+    return meshes
+
+def create_lines(point_lists):
+    points = []
+    lines = []
+    cnt=0
+    for pts in point_lists:
+        points.extend(pts)
+        for i in range(len(pts)-1): lines.append([cnt+i,cnt+i+1])
+        cnt+=len(pts)
+    line_segments = open3d.geometry.LineSet()
+    line_segments.points = open3d.utility.Vector3dVector(points)
+    line_segments.lines = open3d.utility.Vector2iVector(lines)
+    return line_segments
+
+def show(geometries):
+    vis = open3d.visualization.Visualizer()
+    vis.create_window()
+    for geo in geometries: vis.add_geometry(geo)
+    vis.get_render_option().load_from_json("renderoptions.json")
+    ctr = vis.get_view_control()
+    parameters = open3d.io.read_pinhole_camera_parameters("screencamera.json")
+    ctr.convert_from_pinhole_camera_parameters(parameters)
+    vis.run()
+    vis.destroy_window()
+
 start_time = time.time()
 
+exterior_only=False
+
 # Initiate cutting cube
-box = CuttingBox([10,10,3], 4, [0,0,166], 10)
+box = CuttingBox([5,1,20], 8, [0,0,161], 0, exterior_only=exterior_only, org_ctr=True)
 
 # Load parameter files
-para = TreeParameters(box, "000111", 15)
+para = TreeParameters(box, "000111", 40)
 
 # Create the tree stem
 stem = Stem(box, para)
 
 # Create the knots
-#knots = []
-#for i in range(para.knots_no): knots.append(Knot(box, para, i))
-
+knots = []
+for i in range(para.knots_no): knots.append(Knot(box, para, stem, i))
 
 # Smoothly join the stem and the branch
-#dist_array = smooth_union_incre(stem.dist_array, branch.dist_array, 0.5, 5)
-#dist_array = branches[0].dist_array
 dist_array = stem.dist_array
-#for knot in knots: dist_array = smooth_union(dist_array, knot.dist_array, 5)
+for knot in knots:
+    dist_array = smooth_union(dist_array, knot.dist_array, 10)
+    #dist_array = smooth_union_incre(dist_array, knot.dist_array, 1, 20)
+print("Stem and knots joined.")
+
 
 # Create point cloud
-points,colors = dist_array_to_point_cloud(stem.dist_array,box,para)
+if exterior_only:
+    points,colors = dist_array_to_point_cloud(dist_array,box,para)
+    point_cloud = create_point_cloud(points, colors=colors)
 
-# Define point cloud for visualization with open3d
-open3d.PointCloud = open3d.geometry.PointCloud
-#point_cloud = open3d.PointCloud()
-#point_cloud.points = open3d.utility.Vector3dVector(points)
-#point_cloud.colors = open3d.utility.Vector3dVector(colors)
-
-
-# mesh stuff
-meshes = []
-n_start = int(np.min(dist_array))+1
-n_end = int(np.max(dist_array))
-if n_end>para.yrs: n_end=para.yrs
-#n_start = 2
-#n_end = 7
-for n in range(n_start,n_end):
-    loc_dist_array = np.copy(dist_array)-n
-    vers, tris = mcubes.marching_cubes(loc_dist_array, 0)
-    vers = vers/box.ppc + box.pos
-    #Define mesh
-    mesh = open3d.geometry.TriangleMesh()
-    mesh.vertices = open3d.utility.Vector3dVector(vers)
-    mesh.triangles = open3d.utility.Vector3iVector(tris)
-    (r, g, b) = colorsys.hsv_to_rgb((n/10)%10, 1.0, 1.0)
-    mesh.paint_uniform_color(np.array([r,g,b]))
-    #mesh.compute_vertex_normals()
-    meshes.append(mesh)
-
-
-
-# Open3D stuff
-# Define outlines of the cube for visualization with open3d
-
-points = np.array(list(itertools.product([0,1],repeat=3)))
-points = box.pos + np.multiply(points,box.dim)
-lines = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7], [0, 4], [1, 5], [2, 6], [3, 7]]
-colors = [[0, 0, 0] for i in range(len(lines))]
-line_set = open3d.geometry.LineSet()
-line_set.points = open3d.utility.Vector3dVector(points)
-line_set.lines = open3d.utility.Vector2iVector(lines)
-line_set.colors = open3d.utility.Vector3dVector(colors)
-
-point_cloud_param = open3d.PointCloud()
-param_pts = []
-param_pts.extend(para.ppts_all)
-#param_pts.extend(para.rpts[0])
-#param_pts.extend(para.rpts[-1])
-for pts in para.rpts: param_pts.extend(pts)
+param_points = para.ppts_all+para.rpts[0]+para.rpts[-1]
 #for pts in para.rpts_ends: param_pts.extend(pts)
-for pts in para.kpts_all: param_pts.extend(pts)
-point_cloud_param.points = open3d.utility.Vector3dVector(param_pts)
+for pts in para.kpts_all: param_points.extend(pts)
+point_cloud_param = create_point_cloud(param_points)
 
-points = []
-lines = []
-cnt=0
-for pts in para.kpts_all:
-    points.extend(pts)
-    for i in range(len(pts)-1): lines.append([cnt+i,cnt+i+1])
-    cnt+=len(pts)
-line_branches = open3d.geometry.LineSet()
-line_branches.points = open3d.utility.Vector3dVector(points)
-line_branches.lines = open3d.utility.Vector2iVector(lines)
+box_outline, box_mesh = create_box_outline_and_mesh(box)
 
-#print('Resolution:', cube_resolution)
-#print('Calculation time:', time.time()-start_time)
+if not exterior_only: meshes = create_meshes(dist_array, box, para)
+
+knot_lines = create_lines(para.kpts_all)
+
+print('---')
+print('Sample points:', np.prod(box.res))
+print('Calculation time:', time.time()-start_time)
+print('Calculation time per sample point:', (time.time()-start_time)/np.prod(box.res))
 
 geos = []
-#geos.extend(meshes)
-geos.append(line_set)
+geos.append(box_outline)
+if exterior_only:
+    geos.append(box_mesh)
+    geos.append(point_cloud)
+else:
+    geos.extend(meshes)
 geos.append(point_cloud_param)
-#geos.append(point_cloud)
-geos.append(line_branches)
-
-vis = open3d.visualization.Visualizer()
-vis.create_window()
-for geo in geos: vis.add_geometry(geo)
-vis.get_render_option().load_from_json("renderoptions.json")
-ctr = vis.get_view_control()
-parameters = open3d.io.read_pinhole_camera_parameters("screencamera.json")
-ctr.convert_from_pinhole_camera_parameters(parameters)
-vis.run()
-vis.destroy_window()
+geos.append(knot_lines)
+show(geos)

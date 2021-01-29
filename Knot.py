@@ -5,9 +5,10 @@ import itertools
 from functions import *
 
 class Knot:
-    def __init__(self, box, para, i): #t0.1
+    def __init__(self, box, para, stem, i): #t0.1
         self.box = box
         self.para = para
+        self.stem = stem
         self.pts = para.kpts[i]
         #print(np.array(self.pts).shape)
         self.rads = para.krads[i]
@@ -15,21 +16,22 @@ class Knot:
         self.org = self.pts[0]
         self.d = 0.05
         self.create_3D_distance_array()
+        print("Knot", str(i)+"/"+str(len(self.para.kpts)))
 
     def create_3D_distance_array(self):
-        self.dist_array = np.zeros(self.box.res, dtype='float64')
-        point_inds = np.argwhere(self.dist_array==0.0)
-        for ind in point_inds: self.dist_array[ind] = self.distance_function(ind)
-        #stem_dist = self.s.dist_array[tuple(ind)]
-        #if stem_dist<(self.s.yrs+0.5): dist_array.append(self.distance_function(ind))
-        #else: dist_array.append(stem_dist)
+        self.dist_array = np.zeros(self.box.res+1, dtype='float64')+999
+        for ind in self.box.inds:
+            pt = self.box.abs_pts[tuple(ind)]
+            self.dist_array[tuple(ind)] = self.distance_function(pt)
+
 
 
     def distance_function(self,pt):
-        pt = np.array(pt)/self.box.ppc+self.box.pos
         pt_vec = pt-np.array(self.pts[0])
         ang = angle(self.vec,pt_vec)
-        if ang>90: distance=999.0 #behind branch
+        len_ratio = np.linalg.norm(pt_vec)/np.linalg.norm(self.vec)
+        max_ang = 25+(1-len_ratio)*50
+        if ang>max_ang or len_ratio>1.5: distance=999.0 #behind branch
         else: distance = point_to_points_distance(pt,self.pts,self.rads,self.para.yrs,self.d)
         return distance
 
