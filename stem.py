@@ -21,9 +21,16 @@ class Stem:
         zi = int(zf)
         ratio = zf-zi
         ###
-        rel_pt = pt-self.para.ppts[zi] # relative point
-        rel_pt = rotateZ([rel_pt],self.para.ppts[0],-self.box.rot)[0]
+        ppt0 = np.array(self.para.ppts[zi])
+        if (zi+1)<len(self.para.ppts): ppt1 = np.array(self.para.ppts[zi+1])
+        else: ppt1 = ppt0
+        ppt = (1-ratio)*ppt0+ratio*ppt1
+        ###
+        rel_pt = rotateZ([pt],self.box.org,-self.box.rot)[0]
+        #rel_pt = rotateZ([rel_pt],self.box.loc_org,-self.box.loc_rot)[0]
+        rel_pt = rel_pt-ppt
         x,y,z = rel_pt
+        ###
         if x==0 and y>=0: omega=90
         elif x==0 and y<0: omega=270
         else: omega = math.degrees(math.atan(y/x))
@@ -31,8 +38,11 @@ class Stem:
         omega = (omega+360)%360
         if round(omega)==360: omega=0
         r0 = self.para.rads[zi][round(omega)]
-        #r1 = self.para.rads[radi+1][round(omega)]
-        #r_max = ratio*r0+(1-ratio)*r1
-        #d = r_max/(self.para.yrs-1)
-        d = r0/(self.para.yrs-1) #temp
-        return math.sqrt(x**2+y**2)/d
+        if (zi+1)<len(self.para.rads): r1 = self.para.rads[zi+1][round(omega)]
+        else: r1=r0
+        r_max = (1-ratio)*r0+ratio*r1
+        ###
+        d = r_max/(self.para.yrs-1)
+        d = 0.2
+        dist_to_pith = math.sqrt(x**2+y**2)
+        return dist_to_pith/d

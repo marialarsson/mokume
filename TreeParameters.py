@@ -25,11 +25,9 @@ class TreeParameters:
             y = -0.1*float(lines[i+z_num].split("\n")[0])   # millimeter to centimeter
             if i==0: x0, y0 = x, y
             pt = [x-x0,y-y0,i]
-            if pt[2]>=self.box.z0 and pt[2]<=(self.box.z1): self.ppts.append(pt)
             self.ppts_all.append(pt)
-        #x = rad*math.cos(ang)-org[0]
-        #y = rad*math.sin(ang)-org[1]
-        #z = org[2]
+        self.ppts_all = smoothen_points(self.ppts_all,2)
+        self.ppts = self.ppts_all[self.box.z0:self.box.z1+1]
 
     def load_outer_shape_points(self):
         path = "param_data\\"+self.name+"radii.txt"
@@ -40,7 +38,7 @@ class TreeParameters:
         #get radii
         self.rads = []
         smooth_v = 2
-        smooth_h = 5
+        smooth_h = 4
         st = self.box.z0-smooth_v
         en = self.box.z1+smooth_v+1
         for i in range(st,en):
@@ -120,6 +118,16 @@ class TreeParameters:
         self.knots_no = len(self.kpts)
 
 ### FUNCTIONS ###
+
+def smoothen_points(pts,n):
+    for i in range(len(pts)):
+        near_pts = []
+        for j in range(-n,n+1):
+            index = i+j
+            if index>0 and index<len(pts):
+                near_pts.append(pts[index])
+        pts[i] = [sum(x)/len(x) for x in zip(*near_pts)]
+    return pts
 
 def reduce_number_of_points(pts,rads,dd):
     change = True

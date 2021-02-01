@@ -12,6 +12,22 @@ from Stem import Stem
 from Knot import Knot
 from functions import *
 
+def union(d1,d2):
+    #Joining 2 distnace fields
+    d = np.minimum(d1,d2)
+    d[d<0] = 0
+    return d
+
+
+def special_smooth_union(d1,d2,k):
+    #Smoothly joining 2 distnace fields
+    absd = k - np.absolute(d1-d2)
+    absd[absd<0] = 0.0
+    subd = 0.25*np.power(absd,2)/k
+    d = np.minimum(d1-0.2*subd,d2-0.02*subd)
+    d[d<0] = 0
+    return d
+
 def smooth_union(d1,d2,k):
     #Smoothly joining 2 distnace fields
     absd = k - np.absolute(d1-d2)
@@ -21,24 +37,26 @@ def smooth_union(d1,d2,k):
     d[d<0] = 0
     return d
 
-def smooth_union_incre(d1,d2,kmin,kmax):
-    #maxrunda
-    k = 5.0
+def smooth_union_incre(d1,d2,kmin,kmax,yrs):
+    # max field
+    absd = kmax - np.absolute(d1-d2)
+    absd[absd<0] = 0.0
+    subd = 0.25*np.power(absd,2)/kmax
+    d = np.minimum(d1,d2)-subd
+    d[d<0] = 0
+
+    # varying k
+    kd = (kmax-kmin)/yrs
+    k = kmin + kd*d
     absd = k - np.absolute(d1-d2)
     absd[absd<0] = 0.0
     subd = 0.25*np.power(absd,2)/k
     d = np.minimum(d1,d2)-subd
     d[d<0] = 0
-    #runda
-    k = 1.5 + 0.5*d
-    absd = k - np.absolute(d1-d2)
-    absd[absd<0] = 0.0
-    subd = 0.25*np.power(absd,2)/k
-    d = np.minimum(d1,d2)-subd
-    d[d<0] = 0
+
     return d
 
-def dist_array_to_point_cloud(dist_array,box,para):
+def dist_array_to_point_cloud(dist_array,box,para,color_step=10):
     #inds = np.argwhere(dist_array%1<0.25)
     #inds = np.argwhere(dist_array>=0)
     inds = np.argwhere(dist_array<=para.yrs)
@@ -48,7 +66,7 @@ def dist_array_to_point_cloud(dist_array,box,para):
     pos = np.array(box.pos)
     for ind in inds:
         points.append(ind/box.ppc+pos)
-        t = (dist_array[tuple(ind)]/para.yrs)%para.yrs
+        t = (dist_array[tuple(ind)]/color_step)%color_step
         (r, g, b) = colorsys.hsv_to_rgb(t, 1.0, 1.0)
         colors.append([r,g,b])
     points = np.array(points)
@@ -94,7 +112,9 @@ def create_meshes(dist_array, box, para, n_start=None, n_end=None):
     for n in range(n_start,n_end):
         loc_dist_array = np.copy(dist_array)-n
         vers, tris = mcubes.marching_cubes(loc_dist_array, 0)
-        vers = rotateZ(vers/box.ppc,para.ppts[0],box.rot) + box.pos #scale, rotate, move
+        vers = vers/box.ppc+box.pos #scale,move
+        vers = rotateZ(vers,box.org,box.rot) #rotate
+        #vers = rotateZ(vers,box.loc_org,box.loc_rot) #rotate local
         #Define mesh
         mesh = open3d.geometry.TriangleMesh()
         mesh.vertices = open3d.utility.Vector3dVector(vers)
@@ -135,10 +155,10 @@ start_time = time.time()
 exterior_only=False
 
 # Initiate cutting cube
-box = CuttingBox([5,1,20], 8, [0,0,161], 0, exterior_only=exterior_only, org_ctr=True)
+box = CuttingBox([5,1,5], 8, [3,0,165], rot=-15.5, exterior_only=exterior_only, org_ctr=True)
 
 # Load parameter files
-para = TreeParameters(box, "000111", 40)
+para = TreeParameters(box, "000111", 30)
 
 # Create the tree stem
 stem = Stem(box, para)
@@ -150,18 +170,19 @@ for i in range(para.knots_no): knots.append(Knot(box, para, stem, i))
 # Smoothly join the stem and the branch
 dist_array = stem.dist_array
 for knot in knots:
-    dist_array = smooth_union(dist_array, knot.dist_array, 10)
-    #dist_array = smooth_union_incre(dist_array, knot.dist_array, 1, 20)
+    #dist_array = union(dist_array, knot.dist_array)
+    #dist_array = smooth_union(dist_array, knot.dist_array, 10)
+    dist_array = special_smooth_union(dist_array, knot.dist_array, 50)
+    #dist_array = smooth_union_incre(dist_array, knot.dist_array, 0.01, 20, para.yrs)
 print("Stem and knots joined.")
-
 
 # Create point cloud
 if exterior_only:
-    points,colors = dist_array_to_point_cloud(dist_array,box,para)
+    points,colors = dist_array_to_point_cloud(dist_array,box,para, color_step=3)
     point_cloud = create_point_cloud(points, colors=colors)
 
 param_points = para.ppts_all+para.rpts[0]+para.rpts[-1]
-#for pts in para.rpts_ends: param_pts.extend(pts)
+#for pts in para.rpts: param_points.extend(pts)
 for pts in para.kpts_all: param_points.extend(pts)
 point_cloud_param = create_point_cloud(param_points)
 
@@ -181,8 +202,7 @@ geos.append(box_outline)
 if exterior_only:
     geos.append(box_mesh)
     geos.append(point_cloud)
-else:
-    geos.extend(meshes)
+else: geos.extend(meshes)
 geos.append(point_cloud_param)
 geos.append(knot_lines)
 show(geos)

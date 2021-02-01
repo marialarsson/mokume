@@ -14,9 +14,9 @@ class Knot:
         self.rads = para.krads[i]
         self.vec = np.array(self.pts[-1])-np.array(self.pts[0])
         self.org = self.pts[0]
-        self.d = 0.05
+        self.d = 0.02
         self.create_3D_distance_array()
-        print("Knot", str(i)+"/"+str(len(self.para.kpts)))
+        print("Knot", str(i+1)+"/"+str(len(self.para.kpts)))
 
     def create_3D_distance_array(self):
         self.dist_array = np.zeros(self.box.res+1, dtype='float64')+999
@@ -31,7 +31,8 @@ class Knot:
         ang = angle(self.vec,pt_vec)
         len_ratio = np.linalg.norm(pt_vec)/np.linalg.norm(self.vec)
         max_ang = 25+(1-len_ratio)*50
-        if ang>max_ang or len_ratio>1.5: distance=999.0 #behind branch
+        max_ang = 120
+        if ang>max_ang or len_ratio>3: distance=999.0 #behind branch
         else: distance = point_to_points_distance(pt,self.pts,self.rads,self.para.yrs,self.d)
         return distance
 

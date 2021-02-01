@@ -50,7 +50,8 @@ def rotateZ(pts,org,ang,degrees=False):
     if degrees: ang = math.degrees(ang)
     for i in range(len(pts)):
         pts[i] = np.array(pts[i])-np.array(org)
-        x0,y0,_ = pts[i]
+        x0 = pts[i][0]
+        y0 = pts[i][1]
         pts[i][0] = x0*math.cos(ang)-y0*math.sin(ang)
         pts[i][1] = x0*math.sin(ang)+y0*math.cos(ang)
         pts[i] = pts[i]+np.array(org)
