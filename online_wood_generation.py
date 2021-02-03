@@ -6,6 +6,7 @@ import colorsys
 import time
 import itertools
 import mcubes
+from PIL import Image
 from CuttingBox import CuttingBox
 from TreeParameters import TreeParameters
 from Stem import Stem
@@ -18,8 +19,40 @@ def union(d1,d2):
     d[d<0] = 0
     return d
 
+def special_smooth_union(d1,dd1,d2,dd2,k):
+    #Smoothly joining 2 distnace fields
+    absd = k - np.absolute(d1-d2)
+    absd[absd<0] = 0.0
+    subd = 0.25*np.power(absd,2)/k
+    d1 -= np.multiply(dd1,subd)
+    d2 -= np.multiply(dd2,subd)
+    d = np.minimum(d1,d2)
+    d[d<0] = 0
+    ##
+    dd1 += np.divide(subd,dd1)
+    dd2 += np.divide(subd,dd2)
+    dd = np.copy(dd1)
+    inds = np.argwhere(d2<d1)
+    dd[inds] = dd2[inds]
+    ##
+    return d,dd
 
-def special_smooth_union(d1,d2,k):
+    """ #doesnt work
+    #Smoothly joining 2 distnace fields
+    d1 = np.multiply(d1,dd1)
+    d2 = np.multiply(d2,dd2)
+    absd = k - np.absolute(d1-d2)
+    absd[absd<0] = 0.0
+    subd = 0.25*np.power(absd,2)/k
+    #sdf = np.minimum(d1,d2)-subd
+    d1 = np.divide(d1-subd,dd1)
+    d2 = np.divide(d2-subd,dd2)
+    d = np.minimum(d1,d2)
+    #dd = np.divide(sdf,d)
+    d[d<0] = 0
+    return d,dd1
+    """
+    """
     #Smoothly joining 2 distnace fields
     absd = k - np.absolute(d1-d2)
     absd[absd<0] = 0.0
@@ -27,6 +60,7 @@ def special_smooth_union(d1,d2,k):
     d = np.minimum(d1-0.2*subd,d2-0.02*subd)
     d[d<0] = 0
     return d
+    """
 
 def smooth_union(d1,d2,k):
     #Smoothly joining 2 distnace fields
@@ -36,6 +70,36 @@ def smooth_union(d1,d2,k):
     d = np.minimum(d1,d2)-subd
     d[d<0] = 0
     return d
+
+def special_smooth_incre_union(d1,dd1,d2,dd2,kmin,kmax,yrs):
+    # Max field
+    k = kmax
+    absd = k - np.absolute(d1-d2)
+    absd[absd<0] = 0.0
+    subd = 0.25*np.power(absd,2)/k
+    d1 -= np.multiply(dd1,subd)
+    d2 -= np.multiply(dd2,subd)
+    d = np.minimum(d1,d2)
+    d[d<0] = 0
+
+    # varying k
+    kd = (kmax-kmin)/yrs
+    k = kmin + kd*d
+    absd = k - np.absolute(d1-d2)
+    absd[absd<0] = 0.0
+    subd = 0.25*np.power(absd,2)/k
+    d1 -= np.multiply(dd1,subd)
+    d2 -= np.multiply(dd2,subd)
+    d = np.minimum(d1,d2)
+    d[d<0] = 0
+    ##
+    dd1 += np.divide(subd,dd1)
+    dd2 += np.divide(subd,dd2)
+    dd = np.copy(dd1)
+    inds = np.argwhere(d2<d1)
+    dd[inds] = dd2[inds]
+    ##
+    return d,dd
 
 def smooth_union_incre(d1,d2,kmin,kmax,yrs):
     # max field
@@ -59,13 +123,16 @@ def smooth_union_incre(d1,d2,kmin,kmax,yrs):
 def dist_array_to_point_cloud(dist_array,box,para,color_step=10):
     #inds = np.argwhere(dist_array%1<0.25)
     #inds = np.argwhere(dist_array>=0)
+    #inds = np.argwhere(dist_array<=para.yrs)
+    #inds = np.argwhere( (dist_array%1<0.25) & (dist_array<=para.yrs) & (dist_array>0) )
     inds = np.argwhere(dist_array<=para.yrs)
-    #inds = np.argwhere( (dist_array%1<0.25) & (dist_array<=para.yrs) )
     points = []
     colors = [] # Colors (rainbow color gradient according to year)
     pos = np.array(box.pos)
     for ind in inds:
-        points.append(ind/box.ppc+pos)
+        pt = ind/box.ppc+box.pos #scale,move
+        pt = rotateZ([pt],box.org,box.rot)[0] #rotate
+        points.append(pt)
         t = (dist_array[tuple(ind)]/color_step)%color_step
         (r, g, b) = colorsys.hsv_to_rgb(t, 1.0, 1.0)
         colors.append([r,g,b])
@@ -139,26 +206,31 @@ def create_lines(point_lists):
     line_segments.lines = open3d.utility.Vector2iVector(lines)
     return line_segments
 
-def show(geometries):
+def show(geometries,view_no):
     vis = open3d.visualization.Visualizer()
     vis.create_window()
     for geo in geometries: vis.add_geometry(geo)
     vis.get_render_option().load_from_json("renderoptions.json")
     ctr = vis.get_view_control()
-    parameters = open3d.io.read_pinhole_camera_parameters("screencamera.json")
+    parameters = open3d.io.read_pinhole_camera_parameters("ScreenCamera_"+str(int(view_no))+".json")
     ctr.convert_from_pinhole_camera_parameters(parameters)
     vis.run()
     vis.destroy_window()
 
 start_time = time.time()
 
+view_no = 4
+
+slice_only=False
 exterior_only=False
 
 # Initiate cutting cube
-box = CuttingBox([5,1,5], 8, [3,0,165], rot=-15.5, exterior_only=exterior_only, org_ctr=True)
+box = CuttingBox([5,1,8], 5, [3,0,164], rot=-17.5, slice_only=slice_only, exterior_only=exterior_only, org_ctr=True)
 
 # Load parameter files
-para = TreeParameters(box, "000111", 30)
+para = TreeParameters(box, "000111", 128, 30)
+
+print(len(para.ppts_all))
 
 # Create the tree stem
 stem = Stem(box, para)
@@ -169,15 +241,17 @@ for i in range(para.knots_no): knots.append(Knot(box, para, stem, i))
 
 # Smoothly join the stem and the branch
 dist_array = stem.dist_array
+dd = stem.dd
 for knot in knots:
     #dist_array = union(dist_array, knot.dist_array)
     #dist_array = smooth_union(dist_array, knot.dist_array, 10)
-    dist_array = special_smooth_union(dist_array, knot.dist_array, 50)
+    dist_array, dd = special_smooth_union(dist_array, dd, knot.dist_array, knot.dd, 30)
+    #dist_array, dd = special_smooth_incre_union(dist_array, dd, knot.dist_array, knot.dd, 1, 40, para.yrs)
     #dist_array = smooth_union_incre(dist_array, knot.dist_array, 0.01, 20, para.yrs)
 print("Stem and knots joined.")
 
 # Create point cloud
-if exterior_only:
+if slice_only or exterior_only:
     points,colors = dist_array_to_point_cloud(dist_array,box,para, color_step=3)
     point_cloud = create_point_cloud(points, colors=colors)
 
@@ -188,7 +262,11 @@ point_cloud_param = create_point_cloud(param_points)
 
 box_outline, box_mesh = create_box_outline_and_mesh(box)
 
-if not exterior_only: meshes = create_meshes(dist_array, box, para)
+if not slice_only and not exterior_only: meshes = create_meshes(dist_array, box, para)
+
+#if slice_only:
+#    slice_lines = trimesh.intersections.mesh_plane(meshes[5], [0,0,0], [0,0,box.pos[2]+0.5])
+#    print(slice_lines)
 
 knot_lines = create_lines(para.kpts_all)
 
@@ -197,12 +275,26 @@ print('Sample points:', np.prod(box.res))
 print('Calculation time:', time.time()-start_time)
 print('Calculation time per sample point:', (time.time()-start_time)/np.prod(box.res))
 
-geos = []
-geos.append(box_outline)
-if exterior_only:
-    geos.append(box_mesh)
-    geos.append(point_cloud)
-else: geos.extend(meshes)
-geos.append(point_cloud_param)
-geos.append(knot_lines)
-show(geos)
+##slice image
+if slice_only:
+    img_data = np.copy(dist_array)
+    img_data[img_data>para.yrs]=0.0 #black outside tree
+    img_data = np.array(255*((img_data%1)**4),dtype=np.uint8)
+    img_data = np.pad(img_data, ((0, 0),(0, 0),(1, 1)), 'edge') #grayscale to RGB
+    img = Image.fromarray(img_data, 'RGB')
+    img.save('slice_'+str(int(box.pos[2]))+'.png')
+    img.show()
+
+else:
+    ##3d view
+    geos = []
+    geos.append(box_outline)
+    if slice_only:
+        geos.append(point_cloud)
+    elif exterior_only:
+        geos.append(box_mesh)
+        geos.append(point_cloud)
+    else: geos.extend(meshes)
+    geos.append(point_cloud_param)
+    geos.append(knot_lines)
+    show(geos,view_no)

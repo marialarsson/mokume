@@ -12,9 +12,10 @@ class Stem:
 
     def create_3D_distance_array(self):
         self.dist_array = np.zeros(self.box.res+1, dtype='float64')+999
+        self.dd = np.zeros(self.box.res+1, dtype='float64')+999
         for ind in self.box.inds:
             pt = self.box.abs_pts[tuple(ind)]
-            self.dist_array[tuple(ind)] = self.distance_function(pt)
+            self.dist_array[tuple(ind)],self.dd[tuple(ind)] = self.distance_function(pt)
 
     def distance_function(self,pt):
         zf = pt[2]-self.box.pos[2]
@@ -43,6 +44,5 @@ class Stem:
         r_max = (1-ratio)*r0+ratio*r1
         ###
         d = r_max/(self.para.yrs-1)
-        d = 0.2
         dist_to_pith = math.sqrt(x**2+y**2)
-        return dist_to_pith/d
+        return dist_to_pith/d,d

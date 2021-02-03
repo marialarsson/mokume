@@ -3,9 +3,10 @@ import numpy as np
 from functions import *
 
 class TreeParameters:
-    def __init__(self, box, name, yrs):
+    def __init__(self, box, name, img_res, yrs):
         self.box = box
         self.name = name
+        self.img_res = img_res # not currently used
         self.yrs = yrs
         zd = box.dim[2]+1
         self.load_pith_points()
@@ -115,6 +116,8 @@ class TreeParameters:
                 self.kpts.append(pts)
                 self.krads.append(rads)
             self.kpts_all.append(pts)
+        self.kpts = [self.kpts[5]] ##### temoprary
+        self.krads= [self.krads[5]] ##### temporary
         self.knots_no = len(self.kpts)
 
 ### FUNCTIONS ###

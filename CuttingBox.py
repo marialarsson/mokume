@@ -3,10 +3,13 @@ import numpy as np
 from functions import *
 
 class CuttingBox:
-    def __init__(self, dim, ppc, pos, rot=0, exterior_only=False, org_ctr=True, ctr_xy=True):
+    def __init__(self, dim, ppc, pos, rot=0, slice_only=False, exterior_only=False, org_ctr=True, ctr_xy=True):
         self.dim = np.array(dim)
+        #if slice_only: self.dim[2]=1
         self.ppc = ppc
         self.res = self.dim*ppc
+        if slice_only: self.res[2]=0
+        self.slice_only = slice_only
         self.exterior_only = exterior_only
         self.pos = pos
         if org_ctr: self.pos -= np.array([0.5*dim[0], 0.5*dim[1], 0]) #centering

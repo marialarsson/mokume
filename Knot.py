@@ -19,11 +19,17 @@ class Knot:
         print("Knot", str(i+1)+"/"+str(len(self.para.kpts)))
 
     def create_3D_distance_array(self):
+        """
         self.dist_array = np.zeros(self.box.res+1, dtype='float64')+999
         for ind in self.box.inds:
             pt = self.box.abs_pts[tuple(ind)]
             self.dist_array[tuple(ind)] = self.distance_function(pt)
-
+        """
+        self.dist_array = np.zeros(self.box.res+1, dtype='float64')+999
+        self.dd = np.zeros(self.box.res+1, dtype='float64')+999
+        for ind in self.box.inds:
+            pt = self.box.abs_pts[tuple(ind)]
+            self.dist_array[tuple(ind)],self.dd[tuple(ind)] = self.distance_function(pt)
 
 
     def distance_function(self,pt):
@@ -34,7 +40,7 @@ class Knot:
         max_ang = 120
         if ang>max_ang or len_ratio>3: distance=999.0 #behind branch
         else: distance = point_to_points_distance(pt,self.pts,self.rads,self.para.yrs,self.d)
-        return distance
+        return distance, self.d
 
 #FUNCTIONS
 def get_point_in_best_direction(pt, pts, i):
