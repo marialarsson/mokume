@@ -225,7 +225,7 @@ slice_only=False
 exterior_only=False
 
 # Initiate cutting cube
-box = CuttingBox([5,1,8], 5, [3,0,164], rot=-17.5, slice_only=slice_only, exterior_only=exterior_only, org_ctr=True)
+box = CuttingBox([5,1,8], 10, [3,0,164], rot=-17.75, slice_only=slice_only, exterior_only=exterior_only, org_ctr=True)
 
 # Load parameter files
 para = TreeParameters(box, "000111", 128, 30)
@@ -244,9 +244,9 @@ dist_array = stem.dist_array
 dd = stem.dd
 for knot in knots:
     #dist_array = union(dist_array, knot.dist_array)
-    #dist_array = smooth_union(dist_array, knot.dist_array, 10)
-    dist_array, dd = special_smooth_union(dist_array, dd, knot.dist_array, knot.dd, 30)
-    #dist_array, dd = special_smooth_incre_union(dist_array, dd, knot.dist_array, knot.dd, 1, 40, para.yrs)
+    #dist_array = smooth_union(dist_array, knot.dist_array, 20)
+    #dist_array, dd = special_smooth_union(dist_array, dd, knot.dist_array, knot.dd, 40)
+    dist_array, dd = special_smooth_incre_union(dist_array, dd, knot.dist_array, knot.dd, 1, 20, para.yrs)
     #dist_array = smooth_union_incre(dist_array, knot.dist_array, 0.01, 20, para.yrs)
 print("Stem and knots joined.")
 
